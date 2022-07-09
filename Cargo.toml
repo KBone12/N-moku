@@ -9,3 +9,4 @@ repository = "https://github.com/KBone12/N-moku"
 license-file = "LICENSE"
 
 [dependencies]
+crossterm = "0.24.0"
