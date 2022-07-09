@@ -14,12 +14,14 @@ enum Stone {
 }
 
 struct Board {
+    n: usize,
     stones: Vec<Vec<Stone>>,
 }
 
 impl Board {
     pub fn new(n: usize) -> Self {
         Self {
+            n,
             stones: vec![vec![Stone::Empty; n]; n],
         }
     }
@@ -30,6 +32,56 @@ impl Board {
 
     pub fn is_empty(&self, x: usize, y: usize) -> bool {
         self.stones[y][x] == Stone::Empty
+    }
+
+    pub fn check_winner(&self) -> Stone {
+        // Check horizontal
+        for y in 0..self.n {
+            if self.stones[y].iter().all(|stone| *stone == Stone::Black) {
+                return Stone::Black;
+            } else if self.stones[y].iter().all(|stone| *stone == Stone::White) {
+                return Stone::White;
+            }
+        }
+
+        // Check vertical
+        for x in 0..self.n {
+            if self.stones[..][x]
+                .iter()
+                .all(|stone| *stone == Stone::Black)
+            {
+                return Stone::Black;
+            } else if self.stones[..][x]
+                .iter()
+                .all(|stone| *stone == Stone::White)
+            {
+                return Stone::White;
+            }
+        }
+
+        // Check diagonal
+        let mut result = self.stones[0][0];
+        for k in 0..self.n {
+            if self.stones[k][k] != result {
+                result = Stone::Empty;
+                break;
+            }
+        }
+        if result != Stone::Empty {
+            return result;
+        }
+        result = self.stones[0][self.n - 1];
+        for k in 0..self.n {
+            if self.stones[k][self.n - 1 - k] != result {
+                result = Stone::Empty;
+                break;
+            }
+        }
+        if result != Stone::Empty {
+            return result;
+        }
+
+        Stone::Empty
     }
 
     pub fn put(&mut self, stone: Stone, x: usize, y: usize) {
@@ -80,13 +132,12 @@ impl<W: Write> Renderer<W> {
     pub fn render_board(&mut self, board: &Board) {
         crossterm::queue!(
             self.writer,
-            Show,
             MoveTo(
                 self.center_x - self.n as u16 / 2,
                 self.center_y - self.n as u16 / 2
             )
         )
-        .expect("Can't enqueue commands for moving the cursor");
+        .expect("Can't enqueue a command for moving the cursor");
         board.stones().iter().for_each(|row| {
             write!(
                 self.writer,
@@ -124,9 +175,32 @@ impl<W: Write> Renderer<W> {
             MoveTo(
                 self.center_x - self.n as u16 / 2 + x as u16,
                 self.center_y - self.n as u16 / 2 + y as u16
-            )
+            ),
+            Show,
         )
         .expect("Can't move the cursor");
+    }
+
+    pub fn render_winner(&mut self, winner: Stone) {
+        crossterm::queue!(
+            self.writer,
+            Hide,
+            MoveTo(self.center_x - 8, self.center_y - self.n as u16)
+        )
+        .expect("Can't enqueue commands for move the cursor");
+        write!(
+            self.writer,
+            "{} player WIN!!!",
+            if winner == Stone::Black { "1st" } else { "2nd" }
+        )
+        .expect("Can't render the winner");
+        crossterm::queue!(
+            self.writer,
+            MoveTo(self.center_x - 9, self.center_y + self.n as u16)
+        )
+        .expect("Can't enqueue commands for move the cursor");
+        write!(self.writer, "Press [ESC] to quit").expect("Can't render a text");
+        self.writer.flush().expect("Can't flush commands");
     }
 
     pub fn process_event(&mut self, event: &Event) {
@@ -140,6 +214,7 @@ impl<W: Write> Renderer<W> {
     }
 }
 
+#[derive(Eq, PartialEq)]
 enum GameState {
     Title,
     Game,
@@ -159,15 +234,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut cursor_x = 0;
     let mut cursor_y = 0;
     let mut state = GameState::Title;
+    let mut winner = Stone::Empty;
     loop {
         renderer.clear();
         match state {
             GameState::Title => {
                 renderer.render_title();
             }
-            GameState::Game | GameState::Finish => {
+            GameState::Game => {
                 renderer.render_board(&board);
                 renderer.render_cursor(cursor_x, cursor_y);
+            }
+            GameState::Finish => {
+                renderer.render_board(&board);
+                renderer.render_winner(winner);
             }
         }
 
@@ -279,9 +359,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     _ => {}
                 },
-                GameState::Finish => {}
+                _ => {}
             },
             _ => {}
+        }
+
+        if state == GameState::Game {
+            winner = board.check_winner();
+            match winner {
+                Stone::Black | Stone::White => {
+                    state = GameState::Finish;
+                }
+                _ => {}
+            }
         }
     }
 
