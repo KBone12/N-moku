@@ -83,6 +83,14 @@ impl<W: Write> Renderer<W> {
         self.writer.flush().expect("Can't flush commands");
     }
 
+    pub fn render_cursor(&mut self, x: usize, y: usize) {
+        crossterm::execute!(
+            self.writer,
+            MoveTo(self.offset_x + x as u16, self.offset_y + y as u16)
+        )
+        .expect("Can't move the cursor");
+    }
+
     pub fn process_event(&mut self, event: &Event) {
         match event {
             Event::Resize(width, height) => {
@@ -104,8 +112,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut board = Board::new(n);
     let mut renderer = Renderer::new(std::io::stdout(), n);
     let mut black_turn = true;
+    let mut cursor_x = 0;
+    let mut cursor_y = 0;
     loop {
         renderer.render_board(&board);
+        renderer.render_cursor(cursor_x, cursor_y);
 
         let event = crossterm::event::read()?;
         renderer.process_event(&event);
@@ -113,21 +124,101 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Event::Key(KeyEvent {
                 code: KeyCode::Esc, ..
             }) => break,
-            Event::Key(KeyEvent {
-                code: KeyCode::Char(' '),
-                ..
-            }) if board.is_empty(0, 0) => {
-                board.put(
-                    if black_turn {
-                        Stone::Black
-                    } else {
-                        Stone::White
-                    },
-                    0,
-                    0,
-                );
-                black_turn = !black_turn;
-            }
+            Event::Key(KeyEvent { code, .. }) => match code {
+                KeyCode::Char(' ') if board.is_empty(cursor_x, cursor_y) => {
+                    board.put(
+                        if black_turn {
+                            Stone::Black
+                        } else {
+                            Stone::White
+                        },
+                        cursor_x,
+                        cursor_y,
+                    );
+                    black_turn = !black_turn;
+                }
+                KeyCode::Char('B') => {
+                    cursor_x = 0;
+                    cursor_y = n - 1;
+                }
+                KeyCode::Char('H') => {
+                    cursor_x = 0;
+                }
+                KeyCode::Char('J') => {
+                    cursor_y = n - 1;
+                }
+                KeyCode::Char('K') => {
+                    cursor_y = 0;
+                }
+                KeyCode::Char('L') => {
+                    cursor_x = n - 1;
+                }
+                KeyCode::Char('N') => {
+                    cursor_x = n - 1;
+                    cursor_y = n - 1;
+                }
+                KeyCode::Char('U') => {
+                    cursor_x = n - 1;
+                    cursor_y = 0;
+                }
+                KeyCode::Char('Y') => {
+                    cursor_x = 0;
+                    cursor_y = 0;
+                }
+                KeyCode::Char('b') => {
+                    if cursor_x > 0 {
+                        cursor_x -= 1;
+                    }
+                    if cursor_y < n - 1 {
+                        cursor_y += 1;
+                    }
+                }
+                KeyCode::Char('h') => {
+                    if cursor_x > 0 {
+                        cursor_x -= 1;
+                    }
+                }
+                KeyCode::Char('j') => {
+                    if cursor_y < n - 1 {
+                        cursor_y += 1;
+                    }
+                }
+                KeyCode::Char('k') => {
+                    if cursor_y > 0 {
+                        cursor_y -= 1;
+                    }
+                }
+                KeyCode::Char('l') => {
+                    if cursor_x < n - 1 {
+                        cursor_x += 1;
+                    }
+                }
+                KeyCode::Char('n') => {
+                    if cursor_x < n - 1 {
+                        cursor_x += 1;
+                    }
+                    if cursor_y < n - 1 {
+                        cursor_y += 1;
+                    }
+                }
+                KeyCode::Char('u') => {
+                    if cursor_x < n - 1 {
+                        cursor_x += 1;
+                    }
+                    if cursor_y > 0 {
+                        cursor_y -= 1;
+                    }
+                }
+                KeyCode::Char('y') => {
+                    if cursor_x > 0 {
+                        cursor_x -= 1;
+                    }
+                    if cursor_y > 0 {
+                        cursor_y -= 1;
+                    }
+                }
+                _ => {}
+            },
             _ => {}
         }
     }
