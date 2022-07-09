@@ -1,7 +1,7 @@
 use std::io::Write;
 
 use crossterm::{
-    cursor::{MoveTo, MoveToColumn, MoveToNextLine},
+    cursor::{Hide, MoveTo, MoveToColumn, MoveToNextLine, Show},
     event::{Event, KeyCode, KeyEvent},
     terminal::{Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -40,28 +40,53 @@ impl Board {
 struct Renderer<W: Write> {
     writer: W,
     n: usize,
-    offset_x: u16,
-    offset_y: u16,
+    center_x: u16,
+    center_y: u16,
 }
 
 impl<W: Write> Renderer<W> {
     pub fn new(writer: W, n: usize) -> Self {
         let (width, height) =
             crossterm::terminal::size().expect("Can't get the size of the screen");
-        let offset_x = ((width as usize - n) / 2) as _;
-        let offset_y = ((height as usize - n) / 2) as _;
+        let center_x = width / 2;
+        let center_y = height / 2;
 
         Self {
             writer,
             n,
-            offset_x,
-            offset_y,
+            center_x,
+            center_y,
         }
     }
 
+    pub fn clear(&mut self) {
+        crossterm::execute!(self.writer, Clear(ClearType::All)).expect("Can't clear the screen");
+    }
+
+    pub fn render_title(&mut self) {
+        crossterm::queue!(
+            self.writer,
+            Hide,
+            MoveTo(self.center_x - 3, self.center_y - 1)
+        )
+        .expect("Can't enqueue commands for move the cursor");
+        write!(self.writer, "N moku").expect("Can't render the title");
+        crossterm::queue!(self.writer, MoveTo(self.center_x - 11, self.center_y + 1))
+            .expect("Can't enqueue commands for move the cursor");
+        write!(self.writer, "Press [SPACE] to start").expect("Can't render the title");
+        self.writer.flush().expect("Can't flush commands");
+    }
+
     pub fn render_board(&mut self, board: &Board) {
-        crossterm::queue!(self.writer, MoveTo(self.offset_x, self.offset_y))
-            .expect("Can't enqueue a command for moving the cursors");
+        crossterm::queue!(
+            self.writer,
+            Show,
+            MoveTo(
+                self.center_x - self.n as u16 / 2,
+                self.center_y - self.n as u16 / 2
+            )
+        )
+        .expect("Can't enqueue commands for moving the cursor");
         board.stones().iter().for_each(|row| {
             write!(
                 self.writer,
@@ -75,18 +100,31 @@ impl<W: Write> Renderer<W> {
                     .collect::<String>()
             )
             .expect("Can't enqueue commands for drawing a board");
-            crossterm::queue!(self.writer, MoveToNextLine(1), MoveToColumn(self.offset_x),)
-                .expect("Can't enqueue commands for moving cursors");
+            crossterm::queue!(
+                self.writer,
+                MoveToNextLine(1),
+                MoveToColumn(self.center_x - self.n as u16 / 2),
+            )
+            .expect("Can't enqueue commands for moving the cursor");
         });
-        crossterm::queue!(self.writer, MoveTo(self.offset_x, self.offset_y))
-            .expect("Can't enqueue a command for moving the cursor");
+        crossterm::queue!(
+            self.writer,
+            MoveTo(
+                self.center_x - self.n as u16 / 2,
+                self.center_y - self.n as u16 / 2
+            )
+        )
+        .expect("Can't enqueue a command for moving the cursor");
         self.writer.flush().expect("Can't flush commands");
     }
 
     pub fn render_cursor(&mut self, x: usize, y: usize) {
         crossterm::execute!(
             self.writer,
-            MoveTo(self.offset_x + x as u16, self.offset_y + y as u16)
+            MoveTo(
+                self.center_x - self.n as u16 / 2 + x as u16,
+                self.center_y - self.n as u16 / 2 + y as u16
+            )
         )
         .expect("Can't move the cursor");
     }
@@ -94,12 +132,18 @@ impl<W: Write> Renderer<W> {
     pub fn process_event(&mut self, event: &Event) {
         match event {
             Event::Resize(width, height) => {
-                self.offset_x = ((*width as usize - self.n) / 2) as _;
-                self.offset_y = ((*height as usize - self.n) / 2) as _;
+                self.center_x = *width / 2;
+                self.center_y = *height / 2;
             }
             _ => {}
         }
     }
+}
+
+enum GameState {
+    Title,
+    Game,
+    Finish,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -114,9 +158,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut black_turn = true;
     let mut cursor_x = 0;
     let mut cursor_y = 0;
+    let mut state = GameState::Title;
     loop {
-        renderer.render_board(&board);
-        renderer.render_cursor(cursor_x, cursor_y);
+        renderer.clear();
+        match state {
+            GameState::Title => {
+                renderer.render_title();
+            }
+            GameState::Game | GameState::Finish => {
+                renderer.render_board(&board);
+                renderer.render_cursor(cursor_x, cursor_y);
+            }
+        }
 
         let event = crossterm::event::read()?;
         renderer.process_event(&event);
@@ -124,100 +177,109 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Event::Key(KeyEvent {
                 code: KeyCode::Esc, ..
             }) => break,
-            Event::Key(KeyEvent { code, .. }) => match code {
-                KeyCode::Char(' ') if board.is_empty(cursor_x, cursor_y) => {
-                    board.put(
-                        if black_turn {
-                            Stone::Black
-                        } else {
-                            Stone::White
-                        },
-                        cursor_x,
-                        cursor_y,
-                    );
-                    black_turn = !black_turn;
-                }
-                KeyCode::Char('B') => {
-                    cursor_x = 0;
-                    cursor_y = n - 1;
-                }
-                KeyCode::Char('H') => {
-                    cursor_x = 0;
-                }
-                KeyCode::Char('J') => {
-                    cursor_y = n - 1;
-                }
-                KeyCode::Char('K') => {
-                    cursor_y = 0;
-                }
-                KeyCode::Char('L') => {
-                    cursor_x = n - 1;
-                }
-                KeyCode::Char('N') => {
-                    cursor_x = n - 1;
-                    cursor_y = n - 1;
-                }
-                KeyCode::Char('U') => {
-                    cursor_x = n - 1;
-                    cursor_y = 0;
-                }
-                KeyCode::Char('Y') => {
-                    cursor_x = 0;
-                    cursor_y = 0;
-                }
-                KeyCode::Char('b') => {
-                    if cursor_x > 0 {
-                        cursor_x -= 1;
+            Event::Key(KeyEvent { code, .. }) => match state {
+                GameState::Title => match code {
+                    KeyCode::Char(' ') => {
+                        state = GameState::Game;
                     }
-                    if cursor_y < n - 1 {
-                        cursor_y += 1;
+                    _ => {}
+                },
+                GameState::Game => match code {
+                    KeyCode::Char(' ') if board.is_empty(cursor_x, cursor_y) => {
+                        board.put(
+                            if black_turn {
+                                Stone::Black
+                            } else {
+                                Stone::White
+                            },
+                            cursor_x,
+                            cursor_y,
+                        );
+                        black_turn = !black_turn;
                     }
-                }
-                KeyCode::Char('h') => {
-                    if cursor_x > 0 {
-                        cursor_x -= 1;
+                    KeyCode::Char('B') => {
+                        cursor_x = 0;
+                        cursor_y = n - 1;
                     }
-                }
-                KeyCode::Char('j') => {
-                    if cursor_y < n - 1 {
-                        cursor_y += 1;
+                    KeyCode::Char('H') => {
+                        cursor_x = 0;
                     }
-                }
-                KeyCode::Char('k') => {
-                    if cursor_y > 0 {
-                        cursor_y -= 1;
+                    KeyCode::Char('J') => {
+                        cursor_y = n - 1;
                     }
-                }
-                KeyCode::Char('l') => {
-                    if cursor_x < n - 1 {
-                        cursor_x += 1;
+                    KeyCode::Char('K') => {
+                        cursor_y = 0;
                     }
-                }
-                KeyCode::Char('n') => {
-                    if cursor_x < n - 1 {
-                        cursor_x += 1;
+                    KeyCode::Char('L') => {
+                        cursor_x = n - 1;
                     }
-                    if cursor_y < n - 1 {
-                        cursor_y += 1;
+                    KeyCode::Char('N') => {
+                        cursor_x = n - 1;
+                        cursor_y = n - 1;
                     }
-                }
-                KeyCode::Char('u') => {
-                    if cursor_x < n - 1 {
-                        cursor_x += 1;
+                    KeyCode::Char('U') => {
+                        cursor_x = n - 1;
+                        cursor_y = 0;
                     }
-                    if cursor_y > 0 {
-                        cursor_y -= 1;
+                    KeyCode::Char('Y') => {
+                        cursor_x = 0;
+                        cursor_y = 0;
                     }
-                }
-                KeyCode::Char('y') => {
-                    if cursor_x > 0 {
-                        cursor_x -= 1;
+                    KeyCode::Char('b') => {
+                        if cursor_x > 0 {
+                            cursor_x -= 1;
+                        }
+                        if cursor_y < n - 1 {
+                            cursor_y += 1;
+                        }
                     }
-                    if cursor_y > 0 {
-                        cursor_y -= 1;
+                    KeyCode::Char('h') => {
+                        if cursor_x > 0 {
+                            cursor_x -= 1;
+                        }
                     }
-                }
-                _ => {}
+                    KeyCode::Char('j') => {
+                        if cursor_y < n - 1 {
+                            cursor_y += 1;
+                        }
+                    }
+                    KeyCode::Char('k') => {
+                        if cursor_y > 0 {
+                            cursor_y -= 1;
+                        }
+                    }
+                    KeyCode::Char('l') => {
+                        if cursor_x < n - 1 {
+                            cursor_x += 1;
+                        }
+                    }
+                    KeyCode::Char('n') => {
+                        if cursor_x < n - 1 {
+                            cursor_x += 1;
+                        }
+                        if cursor_y < n - 1 {
+                            cursor_y += 1;
+                        }
+                    }
+                    KeyCode::Char('u') => {
+                        if cursor_x < n - 1 {
+                            cursor_x += 1;
+                        }
+                        if cursor_y > 0 {
+                            cursor_y -= 1;
+                        }
+                    }
+                    KeyCode::Char('y') => {
+                        if cursor_x > 0 {
+                            cursor_x -= 1;
+                        }
+                        if cursor_y > 0 {
+                            cursor_y -= 1;
+                        }
+                    }
+                    _ => {}
+                },
+                GameState::Finish => {}
             },
             _ => {}
         }
