@@ -1,6 +1,6 @@
 [package]
 name = "n_moku"
-version = "0.0.0"
+version = "0.1.0"
 authors = ["kbone <kbonehobby@gmail.com>"]
 edition = "2021"
 description = "N moku is a tic-tac-toe like game but the field is extended to N by N."
