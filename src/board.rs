@@ -40,15 +40,9 @@ impl Board {
 
         // Check vertical
         for x in 0..self.n {
-            if self.stones[..][x]
-                .iter()
-                .all(|stone| *stone == Some(Stone::Black))
-            {
+            if self.stones.iter().all(|row| row[x] == Some(Stone::Black)) {
                 return Some(Stone::Black);
-            } else if self.stones[..][x]
-                .iter()
-                .all(|stone| *stone == Some(Stone::White))
-            {
+            } else if self.stones.iter().all(|row| row[x] == Some(Stone::White)) {
                 return Some(Stone::White);
             }
         }
