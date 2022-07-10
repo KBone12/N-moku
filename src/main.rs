@@ -9,7 +9,7 @@ mod state;
 mod stone;
 use crate::{
     renderer::{CrossTermRenderer, Renderer},
-    state::{State, TitleState},
+    state::State,
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -20,7 +20,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let n = 3;
     let mut renderer = CrossTermRenderer::new(std::io::stdout(), n);
-    let mut state: Box<dyn State<_, Event = _>> = Box::new(TitleState::new()) as _;
+    let mut state = State::new();
     loop {
         state.render(&mut renderer);
 

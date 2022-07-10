@@ -1,214 +1,187 @@
-use crossterm::event::{KeyCode, KeyEvent};
+use crossterm::event::{Event, KeyCode, KeyEvent};
 
 use crate::{board::Board, renderer::Renderer, stone::Stone};
 
-pub trait State<R: Renderer> {
-    type Event;
-
-    fn render(&self, renderer: &mut R);
-    fn process_event(&mut self, event: &Self::Event);
-    fn next_state(&self) -> Option<Box<dyn State<R, Event = Self::Event>>>;
+pub enum State {
+    Title {
+        to_next: bool,
+    },
+    Game {
+        n: usize,
+        board: Board,
+        cursor_x: usize,
+        cursor_y: usize,
+        turn: Stone,
+    },
+    Finish {
+        board: Board,
+        winner: Stone,
+    },
 }
 
-pub struct TitleState {
-    to_next_state: bool,
-}
-
-impl TitleState {
+impl State {
     pub fn new() -> Self {
-        Self {
-            to_next_state: false,
-        }
+        Self::Title { to_next: false }
     }
-}
 
-impl<R: Renderer> State<R> for TitleState {
-    type Event = crossterm::event::Event;
-
-    fn render(&self, renderer: &mut R) {
+    pub fn render<R: Renderer>(&self, renderer: &mut R) {
         renderer.clear();
-        renderer.render_title();
-    }
-
-    fn process_event(&mut self, event: &Self::Event) {
-        match event {
-            Self::Event::Key(KeyEvent {
-                code: KeyCode::Char(' '),
-                ..
-            }) => {
-                self.to_next_state = true;
+        match self {
+            Self::Title { .. } => {
+                renderer.render_title();
             }
-            _ => {}
+            Self::Game {
+                board,
+                cursor_x,
+                cursor_y,
+                ..
+            } => {
+                renderer.render_board(&board);
+                renderer.render_cursor(*cursor_x, *cursor_y);
+            }
+            Self::Finish { board, winner } => {
+                renderer.render_board(&board);
+                renderer.render_winner(*winner);
+            }
         }
     }
 
-    fn next_state(&self) -> Option<Box<dyn State<R, Event = Self::Event>>> {
-        if self.to_next_state {
-            Some(Box::new(GameState::new()))
-        } else {
-            None
-        }
-    }
-}
-
-pub struct GameState {
-    n: usize,
-    board: Board,
-    cursor_x: usize,
-    cursor_y: usize,
-    turn: Stone,
-}
-
-impl GameState {
-    pub fn new() -> Self {
-        let n = 3;
-        Self {
-            n,
-            board: Board::new(n),
-            cursor_x: 0,
-            cursor_y: 0,
-            turn: Stone::Black,
-        }
-    }
-}
-
-impl<R: Renderer> State<R> for GameState {
-    type Event = crossterm::event::Event;
-
-    fn render(&self, renderer: &mut R) {
-        renderer.clear();
-        renderer.render_board(&self.board);
-        renderer.render_cursor(self.cursor_x, self.cursor_y);
-    }
-
-    fn process_event(&mut self, event: &Self::Event) {
-        match event {
-            Self::Event::Key(KeyEvent { code, .. }) => match code {
-                KeyCode::Char(' ') if self.board.is_empty(self.cursor_x, self.cursor_y) => {
-                    self.board
-                        .put(Some(self.turn), self.cursor_x, self.cursor_y);
-                    self.turn = if self.turn == Stone::Black {
-                        Stone::White
-                    } else {
-                        Stone::Black
-                    };
-                }
-                KeyCode::Char('B') => {
-                    self.cursor_x = 0;
-                    self.cursor_y = self.n - 1;
-                }
-                KeyCode::Char('H') => {
-                    self.cursor_x = 0;
-                }
-                KeyCode::Char('J') => {
-                    self.cursor_y = self.n - 1;
-                }
-                KeyCode::Char('K') => {
-                    self.cursor_y = 0;
-                }
-                KeyCode::Char('L') => {
-                    self.cursor_x = self.n - 1;
-                }
-                KeyCode::Char('N') => {
-                    self.cursor_x = self.n - 1;
-                    self.cursor_y = self.n - 1;
-                }
-                KeyCode::Char('U') => {
-                    self.cursor_x = self.n - 1;
-                    self.cursor_y = 0;
-                }
-                KeyCode::Char('Y') => {
-                    self.cursor_x = 0;
-                    self.cursor_y = 0;
-                }
-                KeyCode::Char('b') => {
-                    if self.cursor_x > 0 {
-                        self.cursor_x -= 1;
-                    }
-                    if self.cursor_y < self.n - 1 {
-                        self.cursor_y += 1;
-                    }
-                }
-                KeyCode::Char('h') => {
-                    if self.cursor_x > 0 {
-                        self.cursor_x -= 1;
-                    }
-                }
-                KeyCode::Char('j') => {
-                    if self.cursor_y < self.n - 1 {
-                        self.cursor_y += 1;
-                    }
-                }
-                KeyCode::Char('k') => {
-                    if self.cursor_y > 0 {
-                        self.cursor_y -= 1;
-                    }
-                }
-                KeyCode::Char('l') => {
-                    if self.cursor_x < self.n - 1 {
-                        self.cursor_x += 1;
-                    }
-                }
-                KeyCode::Char('n') => {
-                    if self.cursor_x < self.n - 1 {
-                        self.cursor_x += 1;
-                    }
-                    if self.cursor_y < self.n - 1 {
-                        self.cursor_y += 1;
-                    }
-                }
-                KeyCode::Char('u') => {
-                    if self.cursor_x < self.n - 1 {
-                        self.cursor_x += 1;
-                    }
-                    if self.cursor_y > 0 {
-                        self.cursor_y -= 1;
-                    }
-                }
-                KeyCode::Char('y') => {
-                    if self.cursor_x > 0 {
-                        self.cursor_x -= 1;
-                    }
-                    if self.cursor_y > 0 {
-                        self.cursor_y -= 1;
-                    }
+    pub fn process_event(&mut self, event: &Event) {
+        match self {
+            Self::Title { to_next } => match event {
+                Event::Key(KeyEvent {
+                    code: KeyCode::Char(' '),
+                    ..
+                }) => {
+                    *to_next = true;
                 }
                 _ => {}
             },
-            _ => {}
+            Self::Game {
+                n,
+                board,
+                cursor_x,
+                cursor_y,
+                turn,
+            } => match event {
+                Event::Key(KeyEvent { code, .. }) => match code {
+                    KeyCode::Char(' ') if board.is_empty(*cursor_x, *cursor_y) => {
+                        board.put(Some(*turn), *cursor_x, *cursor_y);
+                        *turn = if *turn == Stone::Black {
+                            Stone::White
+                        } else {
+                            Stone::Black
+                        };
+                    }
+                    KeyCode::Char('B') => {
+                        *cursor_x = 0;
+                        *cursor_y = *n - 1;
+                    }
+                    KeyCode::Char('H') => {
+                        *cursor_x = 0;
+                    }
+                    KeyCode::Char('J') => {
+                        *cursor_y = *n - 1;
+                    }
+                    KeyCode::Char('K') => {
+                        *cursor_y = 0;
+                    }
+                    KeyCode::Char('L') => {
+                        *cursor_x = *n - 1;
+                    }
+                    KeyCode::Char('N') => {
+                        *cursor_x = *n - 1;
+                        *cursor_y = *n - 1;
+                    }
+                    KeyCode::Char('U') => {
+                        *cursor_x = *n - 1;
+                        *cursor_y = 0;
+                    }
+                    KeyCode::Char('Y') => {
+                        *cursor_x = 0;
+                        *cursor_y = 0;
+                    }
+                    KeyCode::Char('b') => {
+                        if *cursor_x > 0 {
+                            *cursor_x -= 1;
+                        }
+                        if *cursor_y < *n - 1 {
+                            *cursor_y += 1;
+                        }
+                    }
+                    KeyCode::Char('h') => {
+                        if *cursor_x > 0 {
+                            *cursor_x -= 1;
+                        }
+                    }
+                    KeyCode::Char('j') => {
+                        if *cursor_y < *n - 1 {
+                            *cursor_y += 1;
+                        }
+                    }
+                    KeyCode::Char('k') => {
+                        if *cursor_y > 0 {
+                            *cursor_y -= 1;
+                        }
+                    }
+                    KeyCode::Char('l') => {
+                        if *cursor_x < *n - 1 {
+                            *cursor_x += 1;
+                        }
+                    }
+                    KeyCode::Char('n') => {
+                        if *cursor_x < *n - 1 {
+                            *cursor_x += 1;
+                        }
+                        if *cursor_y < *n - 1 {
+                            *cursor_y += 1;
+                        }
+                    }
+                    KeyCode::Char('u') => {
+                        if *cursor_x < *n - 1 {
+                            *cursor_x += 1;
+                        }
+                        if *cursor_y > 0 {
+                            *cursor_y -= 1;
+                        }
+                    }
+                    KeyCode::Char('y') => {
+                        if *cursor_x > 0 {
+                            *cursor_x -= 1;
+                        }
+                        if *cursor_y > 0 {
+                            *cursor_y -= 1;
+                        }
+                    }
+                    _ => {}
+                },
+                _ => {}
+            },
+            Self::Finish { .. } => {}
         }
     }
 
-    fn next_state(&self) -> Option<Box<dyn State<R, Event = Self::Event>>> {
-        self.board
-            .check_winner()
-            .map(|winner| Box::new(FinishState::new(self.board.clone(), winner)) as _)
-    }
-}
-
-pub struct FinishState {
-    board: Board,
-    winner: Stone,
-}
-
-impl FinishState {
-    pub fn new(board: Board, winner: Stone) -> Self {
-        Self { board, winner }
-    }
-}
-
-impl<R: Renderer> State<R> for FinishState {
-    type Event = crossterm::event::Event;
-
-    fn render(&self, renderer: &mut R) {
-        renderer.clear();
-        renderer.render_board(&self.board);
-        renderer.render_winner(self.winner);
-    }
-
-    fn process_event(&mut self, _event: &Self::Event) {}
-
-    fn next_state(&self) -> Option<Box<dyn State<R, Event = Self::Event>>> {
-        None
+    pub fn next_state(&self) -> Option<Self> {
+        match self {
+            Self::Title { to_next } => {
+                if *to_next {
+                    let n = 3;
+                    Some(Self::Game {
+                        n,
+                        board: Board::new(n),
+                        cursor_x: 0,
+                        cursor_y: 0,
+                        turn: Stone::Black,
+                    })
+                } else {
+                    None
+                }
+            }
+            Self::Game { board, .. } => board.check_winner().map(|winner| Self::Finish {
+                board: board.clone(),
+                winner,
+            }),
+            Self::Finish { .. } => None,
+        }
     }
 }
