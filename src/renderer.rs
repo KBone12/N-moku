@@ -5,13 +5,13 @@ use crossterm::{
     terminal::{Clear, ClearType},
 };
 
-use crate::{board::Board, stone::Stone};
+use crate::{board::Board, state::Mode, stone::Stone};
 
 pub trait Renderer {
     type Event;
 
     fn clear(&mut self);
-    fn render_title(&mut self);
+    fn render_title(&mut self, current_mode: Mode);
     fn render_board(&mut self, board: &Board);
     fn render_cursor(&mut self, x: usize, y: usize);
     fn render_winner(&mut self, winner: Stone);
@@ -49,18 +49,51 @@ impl<W: Write> Renderer for CrossTermRenderer<W> {
         crossterm::execute!(self.writer, Clear(ClearType::All)).expect("Can't clear the screen");
     }
 
-    fn render_title(&mut self) {
+    fn render_title(&mut self, current_mode: Mode) {
+        let all_modes = Mode::all_modes();
+        let total_modes = all_modes.len();
+
         crossterm::queue!(
             self.writer,
             Hide,
-            MoveTo(self.center_x - 3, self.center_y - 1)
+            MoveTo(
+                self.center_x - 3,
+                self.center_y - (total_modes as u16 - 1) / 2 - 2
+            )
         )
         .expect("Can't enqueue commands for move the cursor");
         write!(self.writer, "N moku").expect("Can't render the title");
 
-        crossterm::queue!(self.writer, MoveTo(self.center_x - 11, self.center_y + 1))
+        all_modes.iter().enumerate().for_each(|(i, mode)| {
+            let display = match mode {
+                Mode::VsAi => "1P GAME",
+                Mode::TwoPlayers => "2P GAME",
+            };
+            let display = if *mode == current_mode {
+                format!("> {} <", display)
+            } else {
+                display.to_string()
+            };
+            crossterm::queue!(
+                self.writer,
+                MoveTo(
+                    self.center_x - display.len() as u16 / 2,
+                    self.center_y + i as u16 - (total_modes as u16 - 1) / 2
+                )
+            )
             .expect("Can't enqueue commands for move the cursor");
-        write!(self.writer, "Press [SPACE] to start").expect("Can't render the title");
+            write!(self.writer, "{}", display).expect("Can't render modes");
+        });
+
+        crossterm::queue!(
+            self.writer,
+            MoveTo(
+                self.center_x - 11,
+                self.center_y + total_modes as u16 / 2 + 2
+            )
+        )
+        .expect("Can't enqueue commands for move the cursor");
+        write!(self.writer, "Press [ENTER] to start").expect("Can't render the title");
 
         self.writer.flush().expect("Can't flush commands");
     }

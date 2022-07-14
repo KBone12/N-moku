@@ -2,9 +2,22 @@ use crossterm::event::{Event, KeyCode, KeyEvent};
 
 use crate::{board::Board, renderer::Renderer, stone::Stone};
 
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub enum Mode {
+    VsAi,
+    TwoPlayers,
+}
+
+impl Mode {
+    pub const fn all_modes() -> [Self; 2] {
+        [Self::VsAi, Self::TwoPlayers]
+    }
+}
+
 pub enum State {
     Title {
         n: usize,
+        current_mode: Mode,
         to_next: bool,
     },
     Game {
@@ -22,14 +35,18 @@ pub enum State {
 
 impl State {
     pub fn new(n: usize) -> Self {
-        Self::Title { n, to_next: false }
+        Self::Title {
+            n,
+            current_mode: Mode::VsAi,
+            to_next: false,
+        }
     }
 
     pub fn render<R: Renderer>(&self, renderer: &mut R) {
         renderer.clear();
         match self {
-            Self::Title { .. } => {
-                renderer.render_title();
+            Self::Title { current_mode, .. } => {
+                renderer.render_title(*current_mode);
             }
             Self::Game {
                 board,
@@ -49,13 +66,23 @@ impl State {
 
     pub fn process_event(&mut self, event: &Event) {
         match self {
-            Self::Title { to_next, .. } => match event {
-                Event::Key(KeyEvent {
-                    code: KeyCode::Char(' '),
-                    ..
-                }) => {
-                    *to_next = true;
-                }
+            Self::Title {
+                current_mode,
+                to_next,
+                ..
+            } => match event {
+                Event::Key(KeyEvent { code, .. }) => match code {
+                    KeyCode::Char('k') => {
+                        *current_mode = Mode::VsAi;
+                    }
+                    KeyCode::Char('j') => {
+                        *current_mode = Mode::TwoPlayers;
+                    }
+                    KeyCode::Enter => {
+                        *to_next = true;
+                    }
+                    _ => {}
+                },
                 _ => {}
             },
             Self::Game {
@@ -164,7 +191,7 @@ impl State {
 
     pub fn next_state(&self) -> Option<Self> {
         match self {
-            Self::Title { n, to_next } => {
+            Self::Title { n, to_next, .. } => {
                 if *to_next {
                     Some(Self::Game {
                         n: *n,
