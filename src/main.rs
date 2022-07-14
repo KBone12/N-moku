@@ -1,4 +1,5 @@
 use crossterm::{
+    cursor::Show,
     event::{Event, KeyCode, KeyEvent},
     terminal::{Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -44,6 +45,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         crossterm::terminal::disable_raw_mode()?;
     }
-    crossterm::execute!(std::io::stdout(), LeaveAlternateScreen)?;
+    crossterm::execute!(std::io::stdout(), Show, LeaveAlternateScreen)?;
     Ok(())
 }
