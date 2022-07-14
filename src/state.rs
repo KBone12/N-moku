@@ -4,6 +4,7 @@ use crate::{board::Board, renderer::Renderer, stone::Stone};
 
 pub enum State {
     Title {
+        n: usize,
         to_next: bool,
     },
     Game {
@@ -20,8 +21,8 @@ pub enum State {
 }
 
 impl State {
-    pub fn new() -> Self {
-        Self::Title { to_next: false }
+    pub fn new(n: usize) -> Self {
+        Self::Title { n, to_next: false }
     }
 
     pub fn render<R: Renderer>(&self, renderer: &mut R) {
@@ -48,7 +49,7 @@ impl State {
 
     pub fn process_event(&mut self, event: &Event) {
         match self {
-            Self::Title { to_next } => match event {
+            Self::Title { to_next, .. } => match event {
                 Event::Key(KeyEvent {
                     code: KeyCode::Char(' '),
                     ..
@@ -163,12 +164,11 @@ impl State {
 
     pub fn next_state(&self) -> Option<Self> {
         match self {
-            Self::Title { to_next } => {
+            Self::Title { n, to_next } => {
                 if *to_next {
-                    let n = 3;
                     Some(Self::Game {
-                        n,
-                        board: Board::new(n),
+                        n: *n,
+                        board: Board::new(*n),
                         cursor_x: 0,
                         cursor_y: 0,
                         turn: Stone::Black,

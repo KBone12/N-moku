@@ -21,7 +21,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let n = 3;
     let mut renderer = CrossTermRenderer::new(std::io::stdout(), n);
-    let mut state = State::new();
+    let mut state = State::new(n);
     loop {
         state.render(&mut renderer);
 
