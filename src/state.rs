@@ -22,6 +22,7 @@ pub enum State {
     },
     Game {
         n: usize,
+        mode: Mode,
         board: Board,
         cursor_x: usize,
         cursor_y: usize,
@@ -87,6 +88,7 @@ impl State {
             },
             Self::Game {
                 n,
+                mode,
                 board,
                 cursor_x,
                 cursor_y,
@@ -100,6 +102,15 @@ impl State {
                         } else {
                             Stone::Black
                         };
+
+                        if *mode == Mode::VsAi && *turn == Stone::White {
+                            crate::ai::action(board, *turn);
+                            *turn = if *turn == Stone::Black {
+                                Stone::White
+                            } else {
+                                Stone::Black
+                            };
+                        }
                     }
                     KeyCode::Char('B') => {
                         *cursor_x = 0;
@@ -191,10 +202,15 @@ impl State {
 
     pub fn next_state(&self) -> Option<Self> {
         match self {
-            Self::Title { n, to_next, .. } => {
+            Self::Title {
+                n,
+                current_mode,
+                to_next,
+            } => {
                 if *to_next {
                     Some(Self::Game {
                         n: *n,
+                        mode: *current_mode,
                         board: Board::new(*n),
                         cursor_x: 0,
                         cursor_y: 0,

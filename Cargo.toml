@@ -10,3 +10,4 @@ license-file = "LICENSE"
 
 [dependencies]
 crossterm = "0.24.0"
+fastrand = "1.7.0"

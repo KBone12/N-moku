@@ -4,6 +4,7 @@ use crossterm::{
     terminal::{Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen},
 };
 
+mod ai;
 mod board;
 mod renderer;
 mod state;
