@@ -30,7 +30,7 @@ pub enum State {
     },
     Finish {
         board: Board,
-        winner: Stone,
+        winner: Option<Stone>,
     },
 }
 
@@ -60,7 +60,11 @@ impl State {
             }
             Self::Finish { board, winner } => {
                 renderer.render_board(&board);
-                renderer.render_winner(*winner);
+                if let Some(winner) = winner {
+                    renderer.render_winner(*winner);
+                } else {
+                    renderer.render_drew();
+                }
             }
         }
     }
@@ -220,10 +224,20 @@ impl State {
                     None
                 }
             }
-            Self::Game { board, .. } => board.check_winner().map(|winner| Self::Finish {
-                board: board.clone(),
-                winner,
-            }),
+            Self::Game { board, .. } => board
+                .check_winner()
+                .map(|winner| Self::Finish {
+                    board: board.clone(),
+                    winner: Some(winner),
+                })
+                .or(if board.check_draw() {
+                    Some(Self::Finish {
+                        board: board.clone(),
+                        winner: None,
+                    })
+                } else {
+                    None
+                }),
             Self::Finish { .. } => None,
         }
     }

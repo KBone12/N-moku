@@ -15,6 +15,7 @@ pub trait Renderer {
     fn render_board(&mut self, board: &Board);
     fn render_cursor(&mut self, x: usize, y: usize);
     fn render_winner(&mut self, winner: Stone);
+    fn render_drew(&mut self);
 
     fn process_event(&mut self, event: &Self::Event);
 }
@@ -156,6 +157,25 @@ impl<W: Write> Renderer for CrossTermRenderer<W> {
             if winner == Stone::Black { "1st" } else { "2nd" }
         )
         .expect("Can't render the winner");
+
+        crossterm::queue!(
+            self.writer,
+            MoveTo(self.center_x - 9, self.center_y + self.n as u16)
+        )
+        .expect("Can't enqueue commands for move the cursor");
+        write!(self.writer, "Press [ESC] to quit").expect("Can't render a text");
+
+        self.writer.flush().expect("Can't flush commands");
+    }
+
+    fn render_drew(&mut self) {
+        crossterm::queue!(
+            self.writer,
+            Hide,
+            MoveTo(self.center_x - 3, self.center_y - self.n as u16)
+        )
+        .expect("Can't enqueue commands for move the cursor");
+        write!(self.writer, "DRAW...",).expect("Can't render \"DRAW...\"");
 
         crossterm::queue!(
             self.writer,

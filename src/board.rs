@@ -22,6 +22,12 @@ impl Board {
         self.stones[y][x].is_none()
     }
 
+    pub fn check_draw(&self) -> bool {
+        self.stones
+            .iter()
+            .all(|row| row.iter().all(|stone| stone.is_some()))
+    }
+
     pub fn check_winner(&self) -> Option<Stone> {
         // Check horizontal
         for y in 0..self.n {
